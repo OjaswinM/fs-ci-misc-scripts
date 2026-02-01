@@ -1,9 +1,5 @@
 #!/bin/bash
-set -xe
-
-# This gives remote_host, remote_pass and remote_user
-source "$(dirname "$0")/hostdetails"
-
+set -x
 
 push_logs_to_server() {
     local run_id=$1
@@ -36,7 +32,8 @@ push_logs_to_server() {
 
 upload_results() {
     local json_file=$1
-    local url="http://$remote_host:3000/api/import-test-run"
+    #local url="http://$remote_host:3000/api/import-test-run"
+    local url=$dashboard_insert_url
 
     if [[ -z "$json_file" || ! -f "$json_file" ]]; then
         echo "Error: JSON file '$json_file' not found."
@@ -63,6 +60,42 @@ upload_results() {
         return 1
     fi
 }
+
+HOSTDETAILS_FILE="$(dirname "$0")/hostdetails"
+
+required_vars=(
+  remote_host
+  remote_user
+  remote_pass
+  dashboard_insert_url
+)
+
+if [[ -f "$HOSTDETAILS_FILE" ]]; then
+	# shellcheck source=/dev/null
+	source "$HOSTDETAILS_FILE"
+else
+	# This happens in jnekins run
+	echo "hostdetails not found, using environment variables"
+fi
+
+# ---- validation ----
+missing=()
+
+for v in "${required_vars[@]}"; do
+  if [[ -z "${!v:-}" ]]; then
+    missing+=("$v")
+  fi
+done
+
+if (( ${#missing[@]} > 0 )); then
+  echo "ERROR: Missing required configuration values:"
+  for v in "${missing[@]}"; do
+    echo "  - $v"
+  done
+  echo
+  echo "Provide them via hostdetails file or environment variables."
+  exit 1
+fi
 
 # push the logs to dashboard server
 push_logs_to_server "$1" "$2"

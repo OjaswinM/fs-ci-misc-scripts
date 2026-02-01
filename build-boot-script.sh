@@ -77,31 +77,34 @@ echo Output $?
 # Only for debug, dont uncomment otherwise
 # test_output_dir="/tmp/output-test-ci-user"
 
-# # convert logs to format of dashboard
-# xfstests_scripts_dir="$root_dir/fs-ci-misc-scripts/xfstests-scripts"
-# avocado_convert_script="$xfstests_scripts_dir/convert.py"
-# xml_path="$test_output_dir/results/result.xml"
-# xfstests_results_path="$test_output_dir/results/."
-# logs_op_path="$test_output_dir/output-logs/."
-# json_op_path="$test_output_dir/dashboard_result.json"
-# log_prefix="/var/log/ci-dashboard"
-# 
-# fs="${4%%:*}" # everything before :
-# config="${4##*:}" # everything after :
-# testtype="avocado-xfstest-$fs"
-# subtype="${config//./-}" # replace . with -
-# 
-# if [[ -f "$xml_path" && -d "$xfstests_results_path" ]]
-# then
-# 	python3 $xfstests_scripts_dir/convert.py $xml_path $xfstests_results_path $logs_op_path $log_prefix --output_json $json_op_path --type $testtype --subtype $subtype | tee $test_output_dir/.convert.log
-# 	run_id=$(cat $test_output_dir/.convert.log | tail -n 1 |  awk '{print $3}')
-# 
-# 	$xfstests_scripts_dir/push_logs.sh $run_id $logs_op_path $json_op_path
-# else
-# 	echo "Either $xml_path or $xfstests_results_path doesn't exist. Something went wrong."
-# fi
-# 
-# pushd $test_output_dir
-# rm -f ../logs.zip
-# zip -qr ../logs.zip avocado-logs.zip results
-# popd
+# convert logs to format of dashboard
+xfstests_scripts_dir="$PWD/xfstests-scripts"
+avocado_convert_script="$xfstests_scripts_dir/convert.py"
+xml_path="$test_output_dir/results/result.xml"
+xfstests_results_path="$test_output_dir/results/."
+logs_op_path="$test_output_dir/output-logs/."
+json_op_path="$test_output_dir/dashboard_result.json"
+
+# This is the path where we will push it to remote machine via ssh. Make sure that 
+# this dir is created and remote ssh user has permission to create files here.
+log_prefix="/var/log/ci-dashboard"
+
+fs="${4%%:*}" # everything before :
+config="${4##*:}" # everything after :
+testtype="avocado-xfstest-$fs"
+subtype="${config//./-}" # replace . with -
+
+if [[ -f "$xml_path" && -d "$xfstests_results_path" ]]
+then
+	python3 $xfstests_scripts_dir/convert.py $xml_path $xfstests_results_path $logs_op_path $log_prefix --output_json $json_op_path --type $testtype --subtype $subtype | tee $test_output_dir/.convert.log
+	run_id=$(cat $test_output_dir/.convert.log | tail -n 1 |  awk '{print $3}')
+
+	$xfstests_scripts_dir/push_logs.sh $run_id $logs_op_path $json_op_path
+else
+	echo "Either $xml_path or $xfstests_results_path doesn't exist. Something went wrong."
+fi
+
+pushd $test_output_dir
+rm -f ../logs.zip
+zip -qr ../logs.zip avocado-logs.zip results
+popd

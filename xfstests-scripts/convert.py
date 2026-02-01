@@ -15,14 +15,12 @@ def generate_id():
 
 def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefix: str, output_json: str, testtype, subtype) -> str:
 
-    run_uuid = generate_id()
-
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
 
     # Extracting global run information
     test_type = testtype
-    run_id = root.attrib.get('timestamp')
+    run_id = generate_id()
     #subtype = root.find(".//property[@name='FSTESTSET']").attrib.get('value')
     subtype = subtype
     # kernel_release = root.find(".//property[@name='KERNEL']").attrib.get('value').split()[1]
@@ -72,7 +70,7 @@ def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefi
         else:
 
             if has_logs:
-                log_path = f"{os.path.join(prefix, run_uuid, name.replace('/', '-') + '.zip')}"
+                log_path = f"{os.path.join(prefix, run_id, name.replace('/', '-') + '.zip')}"
             else:
                 log_path = ""
 
@@ -96,6 +94,8 @@ def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefi
                         "name": subtype,
                         "runs": [
                             {
+                                # TODO: for now we hardcode label. can be fixed
+                                "label": "latest",    
                                 "run_id": run_id,
                                 "tests": test_list,
                                 "environment": environment
@@ -110,7 +110,7 @@ def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefi
         json.dump(result, f, indent=4)
     print(json.dumps(result, indent=4))
 
-    return run_uuid
+    return run_id
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Parse xUnit XML and generate result JSON.")
