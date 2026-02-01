@@ -18,13 +18,31 @@ push_logs_to_server() {
     zip -r "$zip_name" "."
     popd
 
-    sshpass -p "$remote_pass" ssh  "${remote_user}@${remote_host}" "mkdir -p \"$remote_dir\""
+    local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
+    sshpass -p "$remote_pass" ssh $ssh_opts "${remote_user}@${remote_host}" "mkdir -p \"$remote_dir\""
+    rc=$?
+    if [ $rc -ne 0 ]; then
+      echo "ERROR: Failed to create directory on remote host"
+      exit 1
+    fi
+    
     echo "Copying zip archive to $remote_host..."
-    sshpass -p "$remote_pass" scp "$zip_name" "${remote_user}@${remote_host}:$remote_dir/"
+    sshpass -p "$remote_pass" scp $ssh_opts "$zip_name" \
+      "${remote_user}@${remote_host}:$remote_dir/"
+    rc=$?
+    if [ $rc -ne 0 ]; then
+      echo "ERROR: Failed to copy zip archive to remote host"
+      exit 1
+    fi
 
     echo "Unzipping on remote..."
-    sshpass -p "$remote_pass" ssh "${remote_user}@${remote_host}" "unzip -o $remote_dir/$(basename "$zip_name") -d $remote_dir && rm $remote_dir/$(basename "$zip_name")"
+    sshpass -p "$remote_pass" ssh $ssh_opts "${remote_user}@${remote_host}" "unzip -o $remote_dir/$(basename "$zip_name") -d $remote_dir && rm $remote_dir/$(basename "$zip_name")"
+    rc=$?
+    if [ $rc -ne 0 ]; then
+      echo "ERROR: Failed to unzip on remote"
+      exit 1
+    fi
 
     echo "Cleaning up local zip..."
     rm "$zip_name"
