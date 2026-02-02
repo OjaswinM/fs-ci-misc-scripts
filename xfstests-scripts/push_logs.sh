@@ -69,8 +69,10 @@ upload_results() {
     if [[ "$status" -ge 200 && "$status" -lt 300 ]]; then
         echo "Success: Server responded with status $status"
         # echo "$body"
-	path=$(echo "$body" | jq -r '.url')
-	run_url="http://$remote_host:3000/$path"
+	testTypeId=$(echo "$body" | jq -r '.testTypeId')
+	subtypeId=$(echo "$body" | jq -r '.subtypeId')
+	runId=$(echo "$body" | jq -r '.runId')
+	run_url=http://$remote_host:$remote_port/test-types/$testTypeId/subtypes/$subtypeId/runs/$runId
 	echo "Dashboard URL of run: $run_url"
     else
         echo "Error: Server responded with status $status"
@@ -85,6 +87,7 @@ required_vars=(
   remote_host
   remote_user
   remote_pass
+  remote_port
   dashboard_insert_url
 )
 
