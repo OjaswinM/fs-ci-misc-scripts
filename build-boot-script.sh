@@ -1,19 +1,75 @@
 #!/bin/bash
-set -xe
+set -ex
 set -o pipefail
 
-echo "Test args: $0 $*"
+#######################################
+# Usage 
+#######################################
+usage() {
+    cat <<EOF
+Usage:
+  $0 -g <linux-git-url> -b <branch> -i <distro img> -f <fs type> -c <avocado-config> [-l <label>]
 
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 <linux_git_url> <branch> <qcow2_image> <fs_type:avacado_xfstests_config_file>"
-    echo
-    echo "Example:"
-    echo "  $0 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git \\"
-    echo "     ubuntu20.04-cloudimg-ppc64el.qcow2 \\"
-    echo "     ext4:ci.yaml"
+Required:
+  -g <linux-git-url>    Linux URL to build,boot and test
+  -b <branch>  		Branch in the repo
+  -i <distro img>	Distro image to boot into
+  -f <filesystem>	Filesystem to test
+  -c <avocado-config>	avocado config file for the FS
+
+Optional:
+  -l <label>		label to identify the run
+  -h          		Show this help
+
+Example:
+   $0 -g https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+       -b master -i ubuntu20.04-cloudimg-ppc64el.qcow2"
+       -f ext4 -c ci.yaml -l test-run"
+EOF
     exit 1
-fi
+}
 
+GIT_URL=""
+BRANCH=""
+IMG=""
+FS=""
+CFG=""
+LABEL=""
+
+while getopts ":g:b:i:f:c:l:h" opt; do
+    case "$opt" in
+        g) GIT_URL="$OPTARG" ;;
+        b) BRANCH="$OPTARG" ;;
+        i) IMG="$OPTARG" ;;
+        f) FS="$OPTARG" ;;
+        c) CFG="$OPTARG" ;;
+        l) LABEL="$OPTARG" ;;
+        h) usage ;;
+        :)
+            echo "Option -$OPTARG requires an argument"
+            usage
+            ;;
+        \?)
+            echo "Invalid option -$OPTARG"
+            usage
+            ;;
+    esac
+done
+
+#######################################
+# Validate required args
+#######################################
+[[ -z "$GIT_URL" ]] && { echo "Missing -g"; usage; }
+[[ -z "$BRANCH" ]] && { echo "Missing -b"; usage; }
+[[ -z "$IMG" ]] && { echo "Missing -i"; usage; }
+[[ -z "$FS" ]] && { echo "Missing -f"; usage; }
+[[ -z "$CFG" ]] && { echo "Missing -f"; usage; }
+[[ -z "$LABEL" ]] && LABEL="unlabelled"
+
+
+###############
+# Start - configure globals and fetch prerequisite scripts
+###############
 root_dir="$PWD/output"
 jenkins_workspace_dir="$PWD/output/run"
 linux_dir="${jenkins_workspace_dir}/linux"
@@ -23,8 +79,18 @@ if [ ! -d ${ci_scripts_dir} ] || [ -z "$(ls -A ${ci_scripts_dir})" ]; then
     git clone --depth=1 https://github.com/OjaswinM/ci-scripts.git ${ci_scripts_dir}
 fi
 
+#############
+# Clone Linux
+#############
+# TODO: Eventually we need to clone into a unique folder named after the commit hash
+if [[ ! -d $linux_dir ]]; then
+    git clone --depth=1 $GIT_URL -b $BRANCH ${linux_dir}
+fi
+
+#############
+# build phase
+#############
 build_dir="$ci_scripts_dir/build"
-#kernel_output_dir="${build_dir}/output/latest-kernel"
 kernel_output_dir="${jenkins_workspace_dir}/build"
 defconfig="ppc64le_guest_defconfig"
 
@@ -33,51 +99,39 @@ export CI_OUTPUT="$kernel_output_dir"
 # this is the toolchain used to build the kernel
 build_make_cmd="make kernel@ppc64le@fedora SRC=${linux_dir} JFACTOR=$(nproc) DEFCONFIG=${defconfig}"
 
-# boot into ubuntu 20.04 by default
-image_name="${3:-ubuntu20.04-cloudimg-ppc64el.qcow2}"
-disk_make_dir="$ci_scripts_dir/root-disks"
-disk_make_cmd="make $image_name"
-
-# TODO: Eventually we need to clone into a unique folder named after the commit hash
-if [[ ! -d $linux_dir ]]; then
-    git clone --depth=1 ${1:-https://web.git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git} -b $2 ${linux_dir}
-fi
-
-# build phase
 pushd $build_dir
 $build_make_cmd
 popd
 
+#############
 # root disk download
+#############
+image_name=$IMG
+disk_make_dir="$ci_scripts_dir/root-disks"
+disk_make_cmd="make $image_name"
+
 pushd $disk_make_dir
 ./install-deps.sh
 make cloud-init-user-data.img
 $disk_make_cmd
 popd
 
+#############
+# boot qemu phase
+#############
 boot_script_dir=$ci_scripts_dir/scripts/boot
-# uuid=$(python3 -c "import uuid; print(str(uuid.uuid4()).replace('-', '')[:12])")
-# # test_output_dir="./output-$uuid"
 test_output_dir="$jenkins_workspace_dir/output"
-
 
 mkdir -p $test_output_dir
 
 # 3rd argument is of form "fs:config, this is because handling spaces was becoming an issue"
-boot_script="${boot_script_dir}/qemu-pseries --accel kvm --cpu POWER8 --cloud-image ${image_name} --test-name avocado --pexpect-timeout 0 --test-output-dir $test_output_dir --test-args $4 --mem-size 8G"
-
-# boot qemu
+boot_script="${boot_script_dir}/qemu-pseries --accel kvm --cpu POWER8 --cloud-image ${image_name} --test-name avocado --pexpect-timeout 0 --test-output-dir $test_output_dir --test-args $FS:$CFG --mem-size 8G"
 KBUILD_OUTPUT=${kernel_output_dir}/latest-kernel ${boot_script}
 echo Output $?
 
-# # cleanup so no misconfiguration happens over time (will take more time each time the script is run)
-# #rm -rf ${linux_dir}
-# #rm -rf ${ci_scripts_dir}/build/output/*
-
-# Only for debug, dont uncomment otherwise
-# test_output_dir="/tmp/output-test-ci-user"
-
+#########
 # convert logs to format of dashboard
+#########
 xfstests_scripts_dir="$PWD/xfstests-scripts"
 avocado_convert_script="$xfstests_scripts_dir/convert.py"
 xml_path="$test_output_dir/results/result.xml"
@@ -89,10 +143,15 @@ json_op_path="$test_output_dir/dashboard_result.json"
 # this dir is created and remote ssh user has permission to create files here.
 log_prefix="/var/log/ci-dashboard"
 
-fs="${4%%:*}" # everything before :
-config="${4##*:}" # everything after :
+fs=$FS
+config=$CFG
 testtype="avocado-xfstest-$fs"
 subtype="${config//./-}" # replace . with -
+
+if [[ -n $LABEL ]]
+then
+	subtype=$subtype-$LABEL
+fi
 
 if [[ -f "$xml_path" && -d "$xfstests_results_path" ]]
 then
