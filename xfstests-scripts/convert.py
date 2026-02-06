@@ -13,7 +13,7 @@ def generate_id():
     short = base64.urlsafe_b64encode(u.bytes).decode('utf-8')
     return short.rstrip('=')
 
-def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefix: str, output_json: str, testtype, subtype) -> str:
+def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefix: str, output_json: str, testtype, subtype, label) -> str:
 
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
@@ -95,7 +95,7 @@ def parse_xunit_xml(xml_file_path: str, results_dir: str, output_dir: str, prefi
                         "runs": [
                             {
                                 # TODO: for now we hardcode label. can be fixed
-                                "label": "latest",    
+                                "label": label,
                                 "run_id": run_id,
                                 "tests": test_list,
                                 "environment": environment
@@ -121,9 +121,10 @@ if __name__ == '__main__':
     parser.add_argument("--output_json", help="where to stroe the output json", default="result.json")
     parser.add_argument("--type", help="test type label used in ci-dashboard", default="xfstest")
     parser.add_argument("--subtype", help="test sub-type label used in ci-dashboard", default="ci-yaml")
+    parser.add_argument("--label", help="The label for the run", default="<unlabelled>")
 
     args = parser.parse_args()
 
-    run_id = parse_xunit_xml(args.xml_path, args.results_dir, args.output_dir, args.prefix, args.output_json, args.type, args.subtype)
+    run_id = parse_xunit_xml(args.xml_path, args.results_dir, args.output_dir, args.prefix, args.output_json, args.type, args.subtype, args.label)
 
     print(f"run id: {run_id}")

@@ -147,15 +147,19 @@ fs=$FS
 config=$CFG
 testtype="avocado-xfstest-$fs"
 subtype="${config//./-}" # replace . with -
-
+label_arg=""
 if [[ -n $LABEL ]]
 then
-	subtype=$subtype-$LABEL
+	label_arg="--label $LABEL"
 fi
 
 if [[ -f "$xml_path" && -d "$xfstests_results_path" ]]
 then
-	python3 $xfstests_scripts_dir/convert.py $xml_path $xfstests_results_path $logs_op_path $log_prefix --output_json $json_op_path --type $testtype --subtype $subtype | tee $test_output_dir/.convert.log
+	python3 $xfstests_scripts_dir/convert.py $xml_path $xfstests_results_path $logs_op_path $log_prefix \
+		--output_json $json_op_path \
+		--type $testtype \
+		--subtype $subtype \
+		$label_arg | tee $test_output_dir/.convert.log
 	run_id=$(cat $test_output_dir/.convert.log | tail -n 1 |  awk '{print $3}')
 
 	$xfstests_scripts_dir/push_logs.sh $run_id $logs_op_path $json_op_path
