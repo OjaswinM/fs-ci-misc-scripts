@@ -124,6 +124,9 @@ test_output_dir="$jenkins_workspace_dir/output"
 
 mkdir -p $test_output_dir
 
+# Make sure smt is off which is needed for p8
+sudo ppc64_cpu --smt=off
+
 # 3rd argument is of form "fs:config, this is because handling spaces was becoming an issue"
 boot_script="${boot_script_dir}/qemu-pseries --accel kvm --cpu POWER8 --cloud-image ${image_name} --test-name avocado --pexpect-timeout 0 --test-output-dir $test_output_dir --test-args $FS:$CFG --mem-size 8G"
 KBUILD_OUTPUT=${kernel_output_dir}/latest-kernel ${boot_script}
